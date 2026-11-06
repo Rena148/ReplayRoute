@@ -1,0 +1,13 @@
+# Local runtime state and backups (may contain personal file paths)
+obs_organizer_state.json*
+*.lua.bak
+*.original.lua
+__pycache__/
+*.pyc
+*.log
+test-results/
+*.mp4
+*.mkv
+*.mov
+*.flv
+*.ts
