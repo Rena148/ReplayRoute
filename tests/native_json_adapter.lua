@@ -18,7 +18,7 @@ bool obs_data_save_json_safe(void*,const char*,const char*,const char*);
 void* obs_data_create_from_json_file_safe(const char*,const char*);
 ]]
 local lib=ffi.load(assert(os.getenv('OBS_BIN'))..'/obs.dll')
-local fields={'src','dst','exe','folder','reason','phase','error','attempts','next','month','original'}
+local fields={'src','dst','exe','folder','reason','phase','error','attempts','next','month','original','routing'}
 local function save(d,path)
  local native=lib.obs_data_create();lib.obs_data_set_int(native,'version',d.version)
  lib.obs_data_set_string(native,'history',d.history)

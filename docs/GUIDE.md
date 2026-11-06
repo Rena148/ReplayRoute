@@ -2,11 +2,19 @@
 
 ## Loading or upgrading
 
-In **OBS → Tools → Scripts**, add `obs_replay_organizer.lua` or select the existing script and click **Reload**. The description should show **ReplayRoute 2.0.1**. Do not load a second copy.
+In **OBS → Tools → Scripts**, add `obs_replay_organizer.lua` or select the existing script and click **Reload**. The description should show **ReplayRoute 2.1.0**. Do not load a second copy.
 
 Keep the existing filename and location when upgrading. Settings keys are unchanged: base folder, unclassified folder, date subfolders, Replay Buffer auto-start, and game rules. Existing folder names are preserved rather than renamed. New installations default to `Unclassified`.
 
 ## Rules and reclassification
+
+### Automatic folders for unknown games
+
+The **Automatically create folders for unknown games (Game Capture only)** setting defaults to enabled. A single, unambiguous, specific-window Game Capture target with no rule creates a safe folder from its executable: `newgame.exe` becomes `newgame`. No title lookup, network request, or background scan is performed. Explicit rules override automatic naming.
+
+Unknown foreground windows alone, fullscreen/hotkey capture targets, conflicting captures, and invalid or reserved Windows folder names remain unclassified. Automatic names are limited to 120 bytes; a failed move still retains the source and records the error.
+
+Auto-routed clips appear in the status panel and clip selector. Adding a rule and using **Save rule and reclassify** moves tracked clips to the new folder without renaming or deleting directories. These records persist across reloads and are retained until classified. Turning the option off only changes future detections. Existing queued moves retain their original routing choice.
 
 Each rule maps a process executable to a single folder name:
 

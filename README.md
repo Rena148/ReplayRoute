@@ -4,12 +4,13 @@
 
 ReplayRoute sorts OBS Studio Replay Buffer clips into game folders. A single Lua script for **64-bit Windows**, running inside OBS without launching shell processes or console windows.
 
-**Version 2.0.1** · English interface · MIT license · No accounts, network requests, or telemetry.
+**Version 2.1.0** · English interface · MIT license · No accounts, network requests, or telemetry.
 
 ## Features
 
 - **No overwrites:** filename collisions receive numbered suffixes.
 - **Game-aware routing:** checks configured Game Capture targets, then a recognized foreground game.
+- **Automatic folders for new games:** an unregistered, specific Game Capture target such as `newgame.exe` can route to `newgame` without adding a rule first.
 - **Recoverable moves:** a persistent JSON queue tracks pending work across reloads.
 - **Bounded retries:** temporary file locks are retried; persistent failures remain available for review.
 - **Rules inside OBS:** add, edit, or remove executable-to-folder mappings without editing Lua.
@@ -28,6 +29,10 @@ ReplayRoute sorts OBS Studio Replay Buffer clips into game folders. A single Lua
 The Lua filename is intentionally unchanged for compatibility with existing installations. Load only one copy of the script.
 
 ## Add a game
+
+**Automatically create folders for unknown games (Game Capture only)** is enabled by default. It uses the executable name without `.exe`, not a guessed commercial game title. Existing rules take priority. Multiple conflicting targets, unsafe folder names, and unknown foreground windows do not trigger automatic folder creation. Fullscreen/hotkey capture modes do not expose a specific configured target for this feature.
+
+Auto-routed clips remain available for reclassification. Add a friendly rule and click **Save rule and reclassify** to move tracked clips to that folder. This moves those clips; it does not rename or delete the old directory. Disabling the option affects future detections, not clips already queued. Auto-routed records remain in the queue until classified, so the state file can grow with those clips.
 
 Enter its executable and desired folder in the script properties, then click **Save rule and reclassify**. You can also edit the multiline rules field:
 

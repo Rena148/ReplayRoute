@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 — 2026-11-05
+
+- Automatically create executable-named folders for unknown specific Game Capture targets, with an enabled-by-default toggle.
+- Keep ambiguous targets and unknown foreground-only detections unclassified.
+- Preserve automatic routing metadata across reloads and allow later reclassification with friendly rules.
+- Validate generated folder names and preserve non-overwriting moves.
+- Add tests for automatic routing, option disabling, rule precedence, unsafe names, ambiguous captures, persistence, and reclassification.
+
 ## 2.0.1 — 2026-11-05
 
 - Rename the project to **ReplayRoute**.

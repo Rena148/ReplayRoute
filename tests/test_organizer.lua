@@ -67,6 +67,8 @@ assert(loadfile(script))()
 local settings={}; script_defaults(settings)
 settings.destination_base_dir=root..'/dest'
 settings.auto_start_replay_buffer=false
+assert(settings.auto_create_game_folders==true,'automatic folders should default to enabled')
+settings.auto_create_game_folders=false
 script_load(settings)
 local t=OBS_ORGANIZER_TEST
 assert(not t.safe_folder('..') and not t.safe_folder('CON.txt') and t.safe_folder('GTA 6'))
@@ -145,7 +147,34 @@ local item=t.queue[10];item.dst=assert(t.destination(item));item.phase='moving';
 assert(os.rename(item.src,item.dst));script_unload()
 OBS_ORGANIZER_TEST=true;assert(loadfile(script))();script_load(settings);t=OBS_ORGANIZER_TEST
 tick_all();assert(t.queue[10].phase=='done' and read(t.queue[10].src)=='journal')
+-- Automatic folders require an unambiguous specific Game Capture target.
+settings.auto_create_game_folders=true;script_update(settings)
+scene.items={capture('brandnew.exe')}
+local detected,auto_folder,_,routing=t.detect()
+assert(detected=='brandnew.exe' and auto_folder=='brandnew' and routing=='auto')
+p=write('automatic.mp4','automatic');t.enqueue(p);tick_all()
+local auto_item=t.queue[#t.queue]
+assert(auto_item.phase=='auto_routed' and read(auto_item.src)=='automatic')
+assert(auto_item.src:find('brandnew',1,true))
+-- Persist and reload the auto-origin marker, then apply a readable rule.
+script_unload();OBS_ORGANIZER_TEST=true;assert(loadfile(script))();script_load(settings);t=OBS_ORGANIZER_TEST
+auto_item=t.queue[#t.queue];assert(auto_item.routing=='auto' and auto_item.phase=='auto_routed')
+settings.game_rules_v2=settings.game_rules_v2..'\nbrandnew.exe = Brand New Game'
+script_update(settings);t.retry();tick_all()
+assert(auto_item.phase=='done' and auto_item.routing=='' and auto_item.src:find('Brand New Game',1,true))
+detected,auto_folder,_,routing=t.detect();assert(auto_folder=='Brand New Game' and routing==nil,'explicit rule wins')
+scene.items={capture('unknown1.exe'),capture('unknown2.exe')}
+detected,auto_folder,_,routing=t.detect();assert(auto_folder==nil and routing==nil)
+for _,unsafe in ipairs({'con.exe','nul.exe','.exe','../bad.exe'}) do
+ scene.items={capture(unsafe)}
+ detected,auto_folder,_,routing=t.detect();assert(auto_folder==nil and routing==nil,unsafe)
+end
+scene.items={capture('fullscreen.exe')};scene.items[1].settings.capture_mode='any_fullscreen'
+detected,auto_folder,_,routing=t.detect();assert(routing~='auto')
+settings.auto_create_game_folders=false;script_update(settings)
+scene.items={capture('disabled.exe')}
+detected,auto_folder,_,routing=t.detect();assert(auto_folder==nil and routing==nil)
 settings.game_rules_v2='invalid';script_update(settings)
 p=write('invalid.mp4','keep');t.enqueue(p);tick_all();assert(read(p)=='keep')
 script_unload()
-print('PASS: naming, safe folders, duplicate events, ambiguous capture, unclassified, reclassification, reload, persistence failure, missing file, invalid rules, UI callbacks')
+print('PASS: recovery, collision safety, retries, auto-routing, option disabled, explicit rule priority, safe names, ambiguity, persisted auto-routing and reclassification')

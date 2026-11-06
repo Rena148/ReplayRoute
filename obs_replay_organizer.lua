@@ -1,5 +1,5 @@
 --[[
-    ReplayRoute 2.0.1 - OBS Replay Buffer clip organizer for Windows.
+    ReplayRoute 2.1.0 - OBS Replay Buffer clip organizer for Windows.
     Native Win32 calls through LuaJIT FFI; no external shell processes.
 ]]
 
@@ -63,6 +63,7 @@ local destination_base_dir = "D:\\Videos"
 local default_folder = "Unclassified"
 local subfolder_by_date = false
 local auto_start_replay_buffer = true
+local auto_create_game_folders = true
 
 -- Executable-to-game folder rules
 local game_rules = {
@@ -113,7 +114,7 @@ local function get_filename_from_path(path)
     return path:match("^.+[/\\](.+)$") or path
 end
 
--- ReplayRoute 2.0.1. Windows / OBS LuaJIT.
+-- ReplayRoute 2.1.0. Windows / OBS LuaJIT.
 ffi.cdef[[
 DWORD GetLastError(void);
 DWORD GetFileAttributesW(LPCWSTR name);
@@ -125,7 +126,7 @@ local loaded, storage_ok = false, true
 local status, config_error = 'Loading', ''
 local settings_ref
 local process_queue, schedule
-local fields = {'src','dst','exe','folder','reason','phase','error','attempts','next','month','original'}
+local fields = {'src','dst','exe','folder','reason','phase','error','attempts','next','month','original','routing'}
 local function norm(p) return (p or ''):gsub('/', '\\'):gsub('\\+$','') end
 local function key(p) return norm(p):lower() end
 local function exists(p) return kernel32.GetFileAttributesW(to_wide(p)) ~= 4294967295 end
@@ -135,7 +136,8 @@ local function directory(p)
 end
 local function safe_folder(s)
     if not s or s == '' or s:find('[%z\1-\31<>:"/\\|?*]') or s:match('[%. ]$') then return false end
-    local stem = s:match('^[^.]+'):upper()
+    local stem = (s:match('^[^.]+') or ''):upper()
+    if stem == '' then return false end
     return not (stem == 'CON' or stem == 'PRN' or stem == 'AUX' or stem == 'NUL' or stem:match('^COM[1-9]$') or stem:match('^LPT[1-9]$'))
 end
 local function valid_base(p) return p:match('^[A-Za-z]:\\') ~= nil and not p:find('\\%.%.?[\\]?') end
@@ -283,7 +285,14 @@ local function detect()
     if count>1 then return '',nil,'Multiple visible Game Capture targets' end
     if count==1 then
         if fg and game_rules[fg] and fg~=only then return '',nil,'Game Capture and foreground game disagree' end
-        return only,game_rules[only],'Configured Game Capture target'
+        if game_rules[only] then return only,game_rules[only],'Configured Game Capture target' end
+        if auto_create_game_folders then
+            local folder=only:match('^(.*)%.exe$')
+            if folder and #folder<=120 and safe_folder(folder) then
+                return only,folder,'Automatic folder from Game Capture executable','auto'
+            end
+        end
+        return only,nil,'Unregistered Game Capture target'
     end
     if fg and game_rules[fg] then return fg,game_rules[fg],'Recognized foreground window' end
     return fg or '',nil,'No specific capture target or recognized foreground window'
@@ -314,7 +323,7 @@ local function fail(item,message,permanent)
 end
 local function complete(item)
     item.src=item.dst; item.dst=''; item.error=''; item.attempts=0
-    item.phase=item.folder=='' and 'unclassified' or 'done'
+    item.phase=item.folder=='' and 'unclassified' or (item.routing=='auto' and 'auto_routed' or 'done')
     note('Saved: '..item.src..' | '..item.reason)
     -- Only completed receipts are bounded. Unresolved clips are never discarded.
     local count=0
@@ -365,9 +374,9 @@ local function enqueue(path)
             if item.phase=='pending' or item.phase=='moving' or item.phase=='blocked' or not exists(path) then return end
         end
     end
-    local exe,folder,why=detect()
+    local exe,folder,why,routing=detect()
     table.insert(queue,{src=path,original=path,dst='',exe=exe,folder=folder or '',reason=why,
-        phase='pending',error='',attempts=0,next=os.time()+1,month=os.date('%Y-%m')})
+        phase='pending',error='',attempts=0,next=os.time()+1,month=os.date('%Y-%m'),routing=routing or ''})
     note('Queued: '..path..' | '..why..' | '..exe)
     if persist() then schedule() end
 end
@@ -376,9 +385,11 @@ local function retry()
     if not persist() then return end
     for _,item in ipairs(queue) do
         if item.phase=='blocked' then item.phase='pending'; item.attempts=0; item.next=0 end
-        if item.phase=='unclassified' and game_rules[item.exe] then
-            item.folder=game_rules[item.exe]; item.phase='pending'; item.attempts=0; item.next=0
-        elseif item.phase=='pending' and item.folder=='' and game_rules[item.exe] then item.folder=game_rules[item.exe] end
+        if (item.phase=='unclassified' or item.phase=='auto_routed') and game_rules[item.exe] then
+            item.folder=game_rules[item.exe]; item.routing=''; item.phase='pending'; item.attempts=0; item.next=0
+        elseif item.phase=='pending' and (item.folder=='' or item.routing=='auto') and game_rules[item.exe] then
+            item.folder=game_rules[item.exe]; item.routing=''
+        end
     end
     if persist() then schedule() end
 end
@@ -413,6 +424,7 @@ local function report()
     for _,item in ipairs(queue) do counts[item.phase]=(counts[item.phase] or 0)+1 end
     table.insert(lines,string.format('Pending: %d | Blocked: %d | Unclassified: %d',
         (counts.pending or 0)+(counts.moving or 0),counts.blocked or 0,counts.unclassified or 0))
+    table.insert(lines,'Auto-routed (available for renaming): '..(counts.auto_routed or 0))
     for _,item in ipairs(queue) do
         if item.phase~='done' then table.insert(lines,item.phase..' | '..item.exe..' | '..get_filename_from_path(item.src)..' | '..item.error) end
         if #lines>=25 then table.insert(lines,'More items in '..state_path); break end
@@ -435,13 +447,14 @@ local function refresh_ui(p)
     return true
 end
 function script_description()
-    return '<h2>ReplayRoute 2.0.1</h2><p>No overwrites. Recoverable queue. Same-drive moves only.</p><p>Rules: executable.exe = Folder, one per line. Click Refresh status to see results.</p>'
+    return '<h2>ReplayRoute 2.1.0</h2><p>No overwrites. Recoverable queue. Same-drive moves only.</p><p>Rules: executable.exe = Folder, one per line. Click Refresh status to see results.</p>'
 end
 function script_defaults(s)
     obs.obs_data_set_default_string(s,'destination_base_dir','D:\\Videos')
     obs.obs_data_set_default_string(s,'default_folder','Unclassified')
     obs.obs_data_set_default_bool(s,'subfolder_by_date',false)
     obs.obs_data_set_default_bool(s,'auto_start_replay_buffer',true)
+    obs.obs_data_set_default_bool(s,'auto_create_game_folders',true)
     obs.obs_data_set_default_string(s,'game_rules_v2',default_rules)
 end
 function script_update(s)
@@ -449,6 +462,7 @@ function script_update(s)
     default_folder=obs.obs_data_get_string(s,'default_folder')
     subfolder_by_date=obs.obs_data_get_bool(s,'subfolder_by_date')
     auto_start_replay_buffer=obs.obs_data_get_bool(s,'auto_start_replay_buffer')
+    auto_create_game_folders=obs.obs_data_get_bool(s,'auto_create_game_folders')
     local parsed,err=parse_rules(obs.obs_data_get_string(s,'game_rules_v2'))
     config_error=err or ''
     if parsed then game_rules=parsed end
@@ -465,6 +479,7 @@ function script_properties()
     obs.obs_properties_add_text(p,'default_folder','Unclassified folder (existing preference is preserved)',obs.OBS_TEXT_DEFAULT)
     obs.obs_properties_add_bool(p,'subfolder_by_date','Create year-month subfolders')
     obs.obs_properties_add_bool(p,'auto_start_replay_buffer','Start Replay Buffer when the script loads')
+    obs.obs_properties_add_bool(p,'auto_create_game_folders','Automatically create folders for unknown games (Game Capture only)')
     obs.obs_properties_add_text(p,'game_rules_v2','Games: executable.exe = Folder (edit / add / remove lines)',obs.OBS_TEXT_MULTILINE)
     obs.obs_properties_add_text(p,'manual_exe','Executable to classify pending clips (e.g. newgame.exe)',obs.OBS_TEXT_DEFAULT)
     obs.obs_properties_add_text(p,'manual_folder','Folder for this executable',obs.OBS_TEXT_DEFAULT)
@@ -480,7 +495,7 @@ function script_properties()
         if not safe_folder(folder) then note('Invalid folder name'); return refresh_ui(props) end
         for _,item in ipairs(queue) do
             if item.src==selected and item.phase~='done' then
-                item.folder=folder; item.reason='Manual assignment'; item.phase='pending'; item.attempts=0; item.next=0
+                item.folder=folder; item.routing=''; item.reason='Manual assignment'; item.phase='pending'; item.attempts=0; item.next=0
                 if persist() then schedule() end
                 return refresh_ui(props)
             end
@@ -506,7 +521,7 @@ function script_load(s)
     script_update(s)
     if not restore() then return end
     loaded=true
-    note('ReplayRoute 2.0.1 loaded; queue restored')
+    note('ReplayRoute 2.1.0 loaded; queue restored')
     obs.obs_frontend_add_event_callback(on_event)
     if persist() then schedule() end
     obs.timer_add(start_buffer,1000)
