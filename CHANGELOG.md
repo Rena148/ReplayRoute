@@ -1,14 +1,21 @@
-# Cambios
+# Changelog
+
+## 2.0.1 — 2026-11-05
+
+- Rename the project to **ReplayRoute**.
+- Translate the interface, messages, comments, documentation, and repository description into English.
+- Use `Unclassified` as the default for new installations while retaining existing folder preferences.
+- Keep the Lua filename and state schema unchanged for upgrade compatibility.
 
 ## 2.0.0 — 2026-11-05
 
-Primera publicación de la versión con recuperación:
+Initial public recovery-enabled version:
 
-- Movimientos sin reemplazar archivos existentes y sufijos en colisiones.
-- Detección basada en Game Capture visible y ventana activa, con manejo de ambigüedad.
-- Cola persistente con JSON de respaldo y reconciliación de movimientos interrumpidos.
-- Hasta seis intentos para fallos temporales; revisión manual para errores permanentes.
-- Edición de reglas y reclasificación desde las propiedades de OBS.
-- Comprobación del estado del Replay Buffer y registro acotado.
-- Rechazo de copias entre unidades y de destinos de red.
-- Pruebas con archivos reales en Windows y entorno OBS simulado.
+- Non-replacing moves and numbered collision suffixes.
+- Visible Game Capture target and foreground-window detection, with ambiguity handling.
+- Persistent JSON queue, backup, and interrupted-move reconciliation.
+- Bounded retries for temporary failures and manual review for permanent errors.
+- Rules editing and reclassification within OBS script properties.
+- Replay Buffer state checks and bounded history.
+- Cross-drive copy and network-destination rejection.
+- Windows tests with real file operations and simulated OBS events.

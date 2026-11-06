@@ -1,15 +1,12 @@
 --[[
-    OBS Replay Buffer Game Organizer (Native Pure LuaJIT FFI Script)
-    -----------------------------------------------------------------
-    Script nativo para OBS Studio que organiza automáticamente los clips del
-    Buffer de Repetición en subcarpetas por juego SIN abrir ventanas de CMD ni
-    PowerShell, y SIN robar foco ni sacar los juegos de pantalla completa.
---]]
+    ReplayRoute 2.0.1 - OBS Replay Buffer clip organizer for Windows.
+    Native Win32 calls through LuaJIT FFI; no external shell processes.
+]]
 
 local obs = obslua
 local ffi = require("ffi")
 
--- Definiciones Win32 C nativas para ejecución directa en memoria sin procesos externos
+-- Native Win32 declarations.
 ffi.cdef[[
     typedef void* HWND;
     typedef void* HANDLE;
@@ -54,20 +51,20 @@ ffi.cdef[[
 local user32 = ffi.load("user32")
 local kernel32 = ffi.load("kernel32")
 
--- Constantes
+-- Constants
 local PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 local PROCESS_QUERY_INFORMATION = 0x0400
 local PROCESS_VM_READ = 0x0010
 local TH32CS_SNAPPROCESS = 0x00000002
 local CP_UTF8 = 65001
 
--- Variables de configuración
+-- Configuration
 local destination_base_dir = "D:\\Videos"
-local default_folder = "Otros"
+local default_folder = "Unclassified"
 local subfolder_by_date = false
 local auto_start_replay_buffer = true
 
--- Mapeo de ejecutables a nombres de juegos
+-- Executable-to-game folder rules
 local game_rules = {
     ["valorant-win64-shipping.exe"] = "Valorant",
     ["valorant.exe"] = "Valorant",
@@ -95,7 +92,7 @@ local game_rules = {
     ["helldivers2.exe"] = "Helldivers 2"
 }
 
--- Utilidades de conversión UTF-8 <-> UTF-16 (Unicode de Windows)
+-- UTF-8 / UTF-16 conversion for Windows paths
 local function to_wide(utf8_str)
     local len = kernel32.MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, nil, 0)
     if len <= 0 then return nil end
@@ -116,7 +113,7 @@ local function get_filename_from_path(path)
     return path:match("^.+[/\\](.+)$") or path
 end
 
--- OBS Clip Auto-Router 2.0. Windows / OBS LuaJIT.
+-- ReplayRoute 2.0.1. Windows / OBS LuaJIT.
 ffi.cdef[[
 DWORD GetLastError(void);
 DWORD GetFileAttributesW(LPCWSTR name);
@@ -125,7 +122,7 @@ unsigned int GetDriveTypeW(LPCWSTR root);
 local queue, history = {}, {}
 local state_path = script_path() .. 'obs_organizer_state.json'
 local loaded, storage_ok = false, true
-local status, config_error = 'Cargando', ''
+local status, config_error = 'Loading', ''
 local settings_ref
 local process_queue, schedule
 local fields = {'src','dst','exe','folder','reason','phase','error','attempts','next','month','original'}
@@ -146,11 +143,11 @@ local function mkdir(p)
     if directory(p) then return true end
     local parent = p:match('^(.*)\\[^\\]+$')
     if parent and parent:match('^[A-Za-z]:$') then parent=parent..'\\' end
-    if not parent or #parent < 3 or parent==p then return false, 'Unidad o carpeta no disponible: '..p end
+    if not parent or #parent < 3 or parent==p then return false, 'Drive or folder unavailable: '..p end
     local ok, err = mkdir(parent)
     if not ok then return false, err end
     if kernel32.CreateDirectoryW(to_wide(p),nil) == 0 and not directory(p) then
-        return false, 'No se pudo crear carpeta (Windows '..tonumber(kernel32.GetLastError())..'): '..p
+        return false, 'Could not create folder (Windows '..tonumber(kernel32.GetLastError())..'): '..p
     end
     return true
 end
@@ -158,7 +155,7 @@ local function note(s)
     status = s
     table.insert(history, os.date('%Y-%m-%d %H:%M:%S')..' '..s)
     while #history > 80 do table.remove(history,1) end
-    obs.blog(obs.LOG_INFO, '[OBSOrganizer] '..s)
+    obs.blog(obs.LOG_INFO, '[ReplayRoute] '..s)
 end
 local function serialize()
     local d = obs.obs_data_create()
@@ -179,20 +176,20 @@ local function persist()
     local ok = obs.obs_data_save_json_safe(d,state_path,'tmp','bak')
     obs.obs_data_release(d)
     storage_ok = ok
-    if not ok then status = 'ERROR: no se puede guardar la cola. No se moveran clips. '..state_path end
+    if not ok then status = 'ERROR: unable to save the queue. Clip moves are paused. '..state_path end
     return ok
 end
 local function restore()
     local d = obs.obs_data_create_from_json_file_safe(state_path,'bak')
     if not d then
         if exists(state_path) or exists(state_path..'.bak') then
-            status = 'ERROR: cola ilegible. Conservada sin sobrescribir; revise el JSON.'
+            status = 'ERROR: unreadable queue. Preserved without overwriting; inspect the JSON file.'
             storage_ok = false; return false
         end
         return true
     end
     if obs.obs_data_get_int(d,'version') ~= 2 then
-        obs.obs_data_release(d); status = 'ERROR: version de cola desconocida'; storage_ok=false; return false
+        obs.obs_data_release(d); status = 'ERROR: unsupported queue version'; storage_ok=false; return false
     end
     local arr = obs.obs_data_get_array(d,'queue')
     if arr then
@@ -224,10 +221,10 @@ local function parse_rules(text)
         if not line:match('^%s*$') then
             local exe,folder=line:match('^%s*(.-)%s*=%s*(.-)%s*$')
             if not exe or not exe:lower():match('%.exe$') or exe:find('[/\\:*?"<>|]') or not safe_folder(folder) then
-                return nil,'Regla invalida: '..line
+                return nil,'Invalid rule: '..line
             end
             exe=exe:lower()
-            if out[exe] then return nil,'Ejecutable repetido: '..exe end
+            if out[exe] then return nil,'Duplicate executable: '..exe end
             out[exe]=folder
         end
     end
@@ -283,22 +280,22 @@ end
 local function detect()
     local t=capture_targets(); local fg=foreground(); local count,only=0,nil
     for exe in pairs(t) do count=count+1; only=exe end
-    if count>1 then return '',nil,'Varias capturas de juego visibles' end
+    if count>1 then return '',nil,'Multiple visible Game Capture targets' end
     if count==1 then
-        if fg and game_rules[fg] and fg~=only then return '',nil,'Captura y ventana activa no coinciden' end
-        return only,game_rules[only],'Destino configurado en Game Capture'
+        if fg and game_rules[fg] and fg~=only then return '',nil,'Game Capture and foreground game disagree' end
+        return only,game_rules[only],'Configured Game Capture target'
     end
-    if fg and game_rules[fg] then return fg,game_rules[fg],'Ventana activa reconocida' end
-    return fg or '',nil,'Sin captura especifica ni ventana reconocida'
+    if fg and game_rules[fg] then return fg,game_rules[fg],'Recognized foreground window' end
+    return fg or '',nil,'No specific capture target or recognized foreground window'
 end
 local function destination(item)
     local folder=item.folder~='' and item.folder or default_folder
-    if not valid_base(destination_base_dir) or not safe_folder(folder) then return nil,'Destino invalido' end
+    if not valid_base(destination_base_dir) or not safe_folder(folder) then return nil,'Invalid destination' end
     local dir=destination_base_dir..'\\'..folder
-    if kernel32.GetDriveTypeW(to_wide(destination_base_dir:sub(1,3)))==4 then return nil,'Unidad de red: elige un destino local' end
+    if kernel32.GetDriveTypeW(to_wide(destination_base_dir:sub(1,3)))==4 then return nil,'Network drive: choose a local destination' end
     if subfolder_by_date then dir=dir..'\\'..item.month end
     -- Never allow cross-volume copying in OBS's timer callback.
-    if item.src:sub(1,2):lower()~=dir:sub(1,2):lower() then return nil,'Otra unidad: mueve el clip manualmente o elige su misma unidad' end
+    if item.src:sub(1,2):lower()~=dir:sub(1,2):lower() then return nil,'Different drive: move the clip manually or choose its source drive' end
     local ok,err=mkdir(dir); if not ok then return nil,err end
     local name=get_filename_from_path(item.src)
     local stem,ext=name:match('^(.*)(%.[^.]*)$'); stem=stem or name; ext=ext or ''
@@ -306,7 +303,7 @@ local function destination(item)
         local path=dir..'\\'..stem..(n==0 and '' or ' ('..n..')')..ext
         if key(path)==key(item.src) or not exists(path) then return path end
     end
-    return nil,'Demasiados nombres repetidos'
+    return nil,'Too many filename collisions'
 end
 local function fail(item,message,permanent)
     item.error=message; item.attempts=item.attempts+1
@@ -318,7 +315,7 @@ end
 local function complete(item)
     item.src=item.dst; item.dst=''; item.error=''; item.attempts=0
     item.phase=item.folder=='' and 'unclassified' or 'done'
-    note('Guardado: '..item.src..' | '..item.reason)
+    note('Saved: '..item.src..' | '..item.reason)
     -- Only completed receipts are bounded. Unresolved clips are never discarded.
     local count=0
     for i=#queue,1,-1 do
@@ -335,8 +332,8 @@ process_queue=function()
             if item.next<=now then
                 if item.phase=='moving' and not exists(item.src) then
                     if item.dst~='' and exists(item.dst) then complete(item)
-                    else fail(item,'Origen no encontrado; revisar archivo antes de reintentar',true) end
-                elseif not exists(item.src) then fail(item,'Origen no encontrado',true)
+                    else fail(item,'Source missing; inspect the file before retrying',true) end
+                elseif not exists(item.src) then fail(item,'Source missing',true)
                 else
                     local dst,err=destination(item)
                     if not dst then fail(item,err,true)
@@ -371,7 +368,7 @@ local function enqueue(path)
     local exe,folder,why=detect()
     table.insert(queue,{src=path,original=path,dst='',exe=exe,folder=folder or '',reason=why,
         phase='pending',error='',attempts=0,next=os.time()+1,month=os.date('%Y-%m')})
-    note('En cola: '..path..' | '..why..' | '..exe)
+    note('Queued: '..path..' | '..why..' | '..exe)
     if persist() then schedule() end
 end
 local function retry()
@@ -385,17 +382,17 @@ local function retry()
     end
     if persist() then schedule() end
 end
-local buffer_status='Sin comprobar'
+local buffer_status='Not checked'
 local function verify_buffer()
     obs.timer_remove(verify_buffer)
-    buffer_status=obs.obs_frontend_replay_buffer_active() and 'Activo' or 'No activo: revisa Ajustes > Salida y el registro de OBS'
+    buffer_status=obs.obs_frontend_replay_buffer_active() and 'Active' or 'Not active: check Settings > Output and the OBS log'
     note('Replay Buffer: '..buffer_status)
 end
 local function start_buffer()
     obs.timer_remove(start_buffer)
     if auto_start_replay_buffer and not obs.obs_frontend_replay_buffer_active() then
         obs.obs_frontend_replay_buffer_start()
-        buffer_status='Inicio solicitado; esperando confirmacion'
+        buffer_status='Start requested; awaiting confirmation'
         obs.timer_add(verify_buffer,3000)
     else verify_buffer() end
 end
@@ -403,24 +400,24 @@ local function on_event(event)
     if event==obs.OBS_FRONTEND_EVENT_REPLAY_BUFFER_SAVED then
         local p=obs.obs_frontend_get_last_replay(); if p and p~='' then enqueue(p) end
     elseif event==obs.OBS_FRONTEND_EVENT_REPLAY_BUFFER_STARTED then
-        obs.timer_remove(verify_buffer); buffer_status='Activo'; note('Replay Buffer activo')
+        obs.timer_remove(verify_buffer); buffer_status='Active'; note('Replay Buffer active')
     elseif event==obs.OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPED then
-        buffer_status='Detenido'; note('Replay Buffer detenido')
+        buffer_status='Stopped'; note('Replay Buffer stopped')
     end
 end
 local function report()
-    local lines={'Replay Buffer: '..(obs.obs_frontend_replay_buffer_active() and 'Activo' or buffer_status),status}
+    local lines={'Replay Buffer: '..(obs.obs_frontend_replay_buffer_active() and 'Active' or buffer_status),status}
     if config_error~='' then table.insert(lines,config_error) end
-    if not storage_ok then table.insert(lines,'ERROR DE ALMACENAMIENTO: clips conservados en origen') end
+    if not storage_ok then table.insert(lines,'STORAGE ERROR: clips remain at their source') end
     local counts={}
     for _,item in ipairs(queue) do counts[item.phase]=(counts[item.phase] or 0)+1 end
-    table.insert(lines,string.format('Pendientes: %d | Bloqueados: %d | Por clasificar: %d',
+    table.insert(lines,string.format('Pending: %d | Blocked: %d | Unclassified: %d',
         (counts.pending or 0)+(counts.moving or 0),counts.blocked or 0,counts.unclassified or 0))
     for _,item in ipairs(queue) do
         if item.phase~='done' then table.insert(lines,item.phase..' | '..item.exe..' | '..get_filename_from_path(item.src)..' | '..item.error) end
-        if #lines>=25 then table.insert(lines,'Mas elementos en '..state_path); break end
+        if #lines>=25 then table.insert(lines,'More items in '..state_path); break end
     end
-    table.insert(lines,'Historial reciente:')
+    table.insert(lines,'Recent history:')
     for i=math.max(1,#history-7),#history do table.insert(lines,history[i]) end
     return table.concat(lines,'\n')
 end
@@ -430,7 +427,7 @@ local function refresh_ui(p)
     local selection=obs.obs_properties_get(p,'selected_clip')
     if selection then
         obs.obs_property_list_clear(selection)
-        obs.obs_property_list_add_string(selection,'Solo aplicar regla a coincidencias','')
+        obs.obs_property_list_add_string(selection,'Only apply the rule to matching executables','')
         for _,item in ipairs(queue) do
             if item.phase~='done' then obs.obs_property_list_add_string(selection,get_filename_from_path(item.src)..' | '..item.exe,item.src) end
         end
@@ -438,11 +435,11 @@ local function refresh_ui(p)
     return true
 end
 function script_description()
-    return '<h2>OBS Clip Auto-Router 2.0</h2><p>Sin sobrescrituras. Cola recuperable. Solo movimientos en la misma unidad.</p><p>Reglas: ejecutable.exe = Carpeta, una por linea. Usa Actualizar estado para ver el resultado.</p>'
+    return '<h2>ReplayRoute 2.0.1</h2><p>No overwrites. Recoverable queue. Same-drive moves only.</p><p>Rules: executable.exe = Folder, one per line. Click Refresh status to see results.</p>'
 end
 function script_defaults(s)
     obs.obs_data_set_default_string(s,'destination_base_dir','D:\\Videos')
-    obs.obs_data_set_default_string(s,'default_folder','Por clasificar')
+    obs.obs_data_set_default_string(s,'default_folder','Unclassified')
     obs.obs_data_set_default_bool(s,'subfolder_by_date',false)
     obs.obs_data_set_default_bool(s,'auto_start_replay_buffer',true)
     obs.obs_data_set_default_string(s,'game_rules_v2',default_rules)
@@ -455,7 +452,7 @@ function script_update(s)
     local parsed,err=parse_rules(obs.obs_data_get_string(s,'game_rules_v2'))
     config_error=err or ''
     if parsed then game_rules=parsed end
-    if not valid_base(destination_base_dir) or not safe_folder(default_folder) then config_error='Carpeta invalida: usa ruta local absoluta y nombre de subcarpeta simple' end
+    if not valid_base(destination_base_dir) or not safe_folder(default_folder) then config_error='Invalid folder: use an absolute local path and a single subfolder name' end
     if settings_ref~=s then
         if settings_ref then obs.obs_data_release(settings_ref) end
         settings_ref=s; obs.obs_data_addref(s)
@@ -464,33 +461,33 @@ function script_update(s)
 end
 function script_properties()
     local p=obs.obs_properties_create()
-    obs.obs_properties_add_path(p,'destination_base_dir','Carpeta base (misma unidad que los clips)',obs.OBS_PATH_DIRECTORY,nil,nil)
-    obs.obs_properties_add_text(p,'default_folder','Carpeta sin clasificar (se conserva tu ajuste anterior)',obs.OBS_TEXT_DEFAULT)
-    obs.obs_properties_add_bool(p,'subfolder_by_date','Subcarpetas por ano-mes')
-    obs.obs_properties_add_bool(p,'auto_start_replay_buffer','Iniciar Replay Buffer al cargar el script')
-    obs.obs_properties_add_text(p,'game_rules_v2','Juegos: ejecutable.exe = Carpeta (editar / agregar / borrar lineas)',obs.OBS_TEXT_MULTILINE)
-    obs.obs_properties_add_text(p,'manual_exe','Ejecutable para reclasificar pendientes (ej. nuevo.exe)',obs.OBS_TEXT_DEFAULT)
-    obs.obs_properties_add_text(p,'manual_folder','Carpeta para ese ejecutable',obs.OBS_TEXT_DEFAULT)
-    local selection=obs.obs_properties_add_list(p,'selected_clip','Clip a corregir (opcional)',obs.OBS_COMBO_TYPE_LIST,obs.OBS_COMBO_FORMAT_STRING)
-    obs.obs_property_list_add_string(selection,'Solo aplicar regla a coincidencias','')
+    obs.obs_properties_add_path(p,'destination_base_dir','Base folder (same drive as the clips)',obs.OBS_PATH_DIRECTORY,nil,nil)
+    obs.obs_properties_add_text(p,'default_folder','Unclassified folder (existing preference is preserved)',obs.OBS_TEXT_DEFAULT)
+    obs.obs_properties_add_bool(p,'subfolder_by_date','Create year-month subfolders')
+    obs.obs_properties_add_bool(p,'auto_start_replay_buffer','Start Replay Buffer when the script loads')
+    obs.obs_properties_add_text(p,'game_rules_v2','Games: executable.exe = Folder (edit / add / remove lines)',obs.OBS_TEXT_MULTILINE)
+    obs.obs_properties_add_text(p,'manual_exe','Executable to classify pending clips (e.g. newgame.exe)',obs.OBS_TEXT_DEFAULT)
+    obs.obs_properties_add_text(p,'manual_folder','Folder for this executable',obs.OBS_TEXT_DEFAULT)
+    local selection=obs.obs_properties_add_list(p,'selected_clip','Clip to reclassify (optional)',obs.OBS_COMBO_TYPE_LIST,obs.OBS_COMBO_FORMAT_STRING)
+    obs.obs_property_list_add_string(selection,'Only apply the rule to matching executables','')
     for _,item in ipairs(queue) do
         if item.phase~='done' then obs.obs_property_list_add_string(selection,get_filename_from_path(item.src)..' | '..item.exe,item.src) end
     end
-    obs.obs_properties_add_button(p,'classify_clip','Asignar carpeta al clip seleccionado',function(props)
+    obs.obs_properties_add_button(p,'classify_clip','Assign folder to selected clip',function(props)
         if not settings_ref then return false end
         local selected=obs.obs_data_get_string(settings_ref,'selected_clip')
         local folder=obs.obs_data_get_string(settings_ref,'manual_folder'):match('^%s*(.-)%s*$')
-        if not safe_folder(folder) then note('Nombre de carpeta invalido'); return refresh_ui(props) end
+        if not safe_folder(folder) then note('Invalid folder name'); return refresh_ui(props) end
         for _,item in ipairs(queue) do
             if item.src==selected and item.phase~='done' then
-                item.folder=folder; item.reason='Asignacion manual'; item.phase='pending'; item.attempts=0; item.next=0
+                item.folder=folder; item.reason='Manual assignment'; item.phase='pending'; item.attempts=0; item.next=0
                 if persist() then schedule() end
                 return refresh_ui(props)
             end
         end
-        note('Selecciona un clip pendiente'); return refresh_ui(props)
+        note('Select a pending clip'); return refresh_ui(props)
     end)
-    obs.obs_properties_add_button(p,'apply_rule','Guardar regla y reclasificar',function(props)
+    obs.obs_properties_add_button(p,'apply_rule','Save rule and reclassify',function(props)
         if not settings_ref then return false end
         local exe=obs.obs_data_get_string(settings_ref,'manual_exe'):lower():match('^%s*(.-)%s*$')
         local folder=obs.obs_data_get_string(settings_ref,'manual_folder'):match('^%s*(.-)%s*$')
@@ -500,8 +497,8 @@ function script_properties()
         obs.obs_data_set_string(settings_ref,'game_rules_v2',rules_text())
         script_update(settings_ref); retry(); return refresh_ui(props)
     end)
-    obs.obs_properties_add_button(p,'retry','Reintentar pendientes y aplicar reglas',function(props) retry(); return refresh_ui(props) end)
-    obs.obs_properties_add_button(p,'refresh','Actualizar estado',refresh_ui)
+    obs.obs_properties_add_button(p,'retry','Retry pending clips and apply rules',function(props) retry(); return refresh_ui(props) end)
+    obs.obs_properties_add_button(p,'refresh','Refresh status',refresh_ui)
     local info=obs.obs_properties_add_text(p,'status_info',report(),obs.OBS_TEXT_INFO)
     return p
 end
@@ -509,7 +506,7 @@ function script_load(s)
     script_update(s)
     if not restore() then return end
     loaded=true
-    note('Version 2.0 cargada; cola recuperada')
+    note('ReplayRoute 2.0.1 loaded; queue restored')
     obs.obs_frontend_add_event_callback(on_event)
     if persist() then schedule() end
     obs.timer_add(start_buffer,1000)

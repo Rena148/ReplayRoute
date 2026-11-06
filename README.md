@@ -1,73 +1,82 @@
-# OBS Clip Auto-Router
+# ReplayRoute
 
-Organiza los clips del Replay Buffer de OBS Studio en carpetas por juego. Script Lua para **Windows de 64 bits**, integrado en OBS, sin procesos externos ni ventanas de consola.
+**Save the replay. Keep it organized.**
 
-**Versión 2.0.0.** No es un plugin oficial de OBS. La interfaz está en español.
+ReplayRoute sorts OBS Studio Replay Buffer clips into game folders. A single Lua script for **64-bit Windows**, running inside OBS without launching shell processes or console windows.
 
-## Funciones
+**Version 2.0.1** · English interface · MIT license · No accounts, network requests, or telemetry.
 
-- Movimiento sin sobrescrituras: añade ` (1)`, ` (2)`, etc. cuando un nombre existe.
-- Detección mediante el ejecutable configurado en Game Capture y, como respaldo, la ventana activa reconocida.
-- Casos ambiguos enviados a una carpeta configurable para clasificar después.
-- Cola JSON persistente, recuperación al recargar y reintentos limitados.
-- Reglas de juegos editables en las propiedades del script y reclasificación manual.
-- Comprobación del Replay Buffer, resumen de pendientes e historial limitado.
-- Inicio opcional del Replay Buffer al cargar el script.
+## Features
 
-## Instalación
+- **No overwrites:** filename collisions receive numbered suffixes.
+- **Game-aware routing:** checks configured Game Capture targets, then a recognized foreground game.
+- **Recoverable moves:** a persistent JSON queue tracks pending work across reloads.
+- **Bounded retries:** temporary file locks are retried; persistent failures remain available for review.
+- **Rules inside OBS:** add, edit, or remove executable-to-folder mappings without editing Lua.
+- **Manual reclassification:** assign ambiguous clips to a folder and retry failed moves.
+- **Visible status:** check pending items, recent history, and actual Replay Buffer state.
+- **Optional auto-start:** request Replay Buffer startup when the script loads.
 
-1. Descarga este repositorio con **Code → Download ZIP** y extrae los archivos en una carpeta donde puedas escribir.
-2. En OBS, abre **Herramientas → Scripts → +** y selecciona `obs_replay_organizer.lua`.
-3. Configura la **carpeta base**. El valor inicial es `D:\Videos`; cámbialo si no corresponde a tu equipo. Debe estar en la misma unidad local que los clips originales.
-4. Habilita y configura el Replay Buffer en **Ajustes → Salida** y asigna un atajo para guardar repeticiones.
-5. Guarda un clip. Comprueba su carpeta y usa **Actualizar estado** para revisar el resultado.
+## Quick start
 
-Para actualizar una instalación existente, respalda el Lua y la cola JSON, reemplaza el Lua y pulsa **Recargar**. Conserva el nombre y la ubicación del script para mantener sus ajustes. No cargues dos copias ni ejecutes otro organizador sobre los mismos clips.
+1. Download this repository using **Code → Download ZIP** and extract it to a writable folder.
+2. Open **OBS → Tools → Scripts → +** and select `obs_replay_organizer.lua`.
+3. Set **Base folder** to a local folder on the **same drive as your original clips**. The initial example is `D:\Videos`; change it to match your computer.
+4. Enable and configure Replay Buffer in **Settings → Output**, and assign a hotkey to save replays.
+5. Save a replay, check its destination, and click **Refresh status**.
 
-## Agregar un juego
+The Lua filename is intentionally unchanged for compatibility with existing installations. Load only one copy of the script.
 
-En las propiedades del script, introduce el ejecutable y la carpeta y pulsa **Guardar regla y reclasificar**. También puedes editar directamente la lista de reglas:
+## Add a game
+
+Enter its executable and desired folder in the script properties, then click **Save rule and reclassify**. You can also edit the multiline rules field:
 
 ```text
-nuevo-juego.exe = Mi juego
-otro-juego.exe = Otro juego
+newgame.exe = My Game
+anothergame.exe = Another Game
 ```
 
-Para un clip ambiguo: selecciona **Clip a corregir**, escribe la carpeta y pulsa **Asignar carpeta al clip seleccionado**. Una asignación manual no crea una regla para un ejecutable desconocido.
+To correct an ambiguous clip, select **Clip to reclassify**, enter a folder, and click **Assign folder to selected clip**. A manual assignment changes that clip only; it does not invent an executable rule.
 
-## Alcance y límites
+## Updating
 
-- Lee el objetivo **configurado** de Game Capture; no prueba que el juego esté enganchado. Conflictos entre capturas o con la ventana activa se dejan sin clasificar.
-- Solo organiza nuevos eventos de replay y pendientes de esta versión. No escanea una biblioteca anterior.
-- Solo permite movimientos en la misma unidad local. No copia videos entre unidades desde OBS.
-- La cola registra movimientos; no es una copia de seguridad del video ni repara grabaciones incompletas.
-- Si no puede guardar la cola, suspende los movimientos. Los errores conservan el archivo en origen cuando no se ha movido.
-- Los eventos y temporizadores reducen trabajo innecesario, pero no significan consumo cero ni ejecución en otro hilo.
-- El estado se actualiza al pulsar **Actualizar estado**, no continuamente.
+Back up the existing Lua file and queue JSON. Replace the Lua file in the same location, then click **Reload** in OBS. Existing settings and game rules remain compatible, including custom folder names. Older queue entries may retain their original log language until processed.
 
-No usa red, cuentas ni telemetría. Crea `obs_organizer_state.json` y su respaldo `.bak` junto al script. Esos archivos contienen rutas locales y quedan excluidos de Git.
+Do not run another organizer on the same clips at the same time.
 
-## Pruebas
+## Behavior and limits
 
-Requiere Windows x64, Python de 64 bits y OBS Studio instalado. Python solo es necesario para ejecutar las pruebas, no para usar el script.
+- Game Capture provides its **configured target**, not proof that OBS successfully hooked the game. Conflicting capture targets or foreground-game signals are left unclassified.
+- Only new replay events and saved queue entries are processed. ReplayRoute does not scan an existing video library.
+- Moves stay on the same local drive. Cross-drive copies and network destinations are blocked to avoid long copy operations inside OBS.
+- The queue records moves; it is not a video backup and cannot repair incomplete recordings or disk failures.
+- If queue storage fails, moves pause. A failed move leaves the source file in place when it has not already moved.
+- Event-driven processing reduces unnecessary work, but is not zero-cost or background-thread execution. Same-volume moves are normally quick, not instantaneous.
+- Click **Refresh status** to update the panel; it does not refresh continuously.
+
+Runtime state lives beside the script in `obs_organizer_state.json` and its `.bak` backup. These files can contain local paths and are excluded from Git.
+
+## Tests
+
+Requirements: Windows x64, 64-bit Python, and OBS Studio installed. Python is **only required for tests**, not to use ReplayRoute.
 
 ```powershell
 python tests/run_lua.py tests/test_organizer.lua
 ```
 
-Si OBS está en otra ubicación:
+For a custom OBS installation:
 
 ```powershell
 $env:OBS_BIN = 'E:\Apps\obs-studio\bin\64bit'
 python tests/run_lua.py tests/test_organizer.lua
 ```
 
-Las pruebas usan LuaJIT y libobs de la instalación local, movimientos reales de archivos temporales y JSON real. La interfaz, las escenas y los eventos de OBS se simulan. Cubren colisiones, archivos ocupados, límite de reintentos, recarga, fallo de persistencia, reclasificación, duplicados, interrupción después de mover y rechazo entre unidades.
+The suite uses installed LuaJIT/libobs, real temporary file moves, and real JSON persistence. OBS scenes, events, and UI functions are simulated. Coverage includes collisions, exclusive locks, retry limits, reload recovery, persistence failure, ambiguous captures, manual reclassification, duplicate events, interrupted moves, and cross-drive rejection.
 
-**Pendiente de validación:** un replay real en OBS y mediciones de rendimiento durante una partida. El proyecto no afirma estar libre de fallos.
+**Still requires real-world validation:** saving a replay inside OBS and measuring performance during gameplay. Passing the tests does not establish that the project is fault-proof.
 
-[Guía detallada](docs/GUIA.md) · [Cambios](CHANGELOG.md)
+[User guide](docs/GUIDE.md) · [Changelog](CHANGELOG.md)
 
-## Licencia
+## License
 
-MIT. Copyright © 2026 Rena148. Las dependencias OBS y LuaJIT no se redistribuyen en este repositorio y conservan sus propias licencias.
+MIT. Copyright © 2026 Rena148. OBS and LuaJIT are not redistributed and retain their respective licenses. ReplayRoute is an independent project, not an official OBS plugin.
