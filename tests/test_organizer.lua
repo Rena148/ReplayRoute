@@ -53,7 +53,9 @@ function o.sceneitem_list_release() end
 function o.obs_properties_create() return {} end
 function o.obs_properties_add_path() end
 function o.obs_properties_add_text(p,k,label) local x={description=label};p[k]=x;return x end
-function o.obs_properties_add_bool() end
+o.obs_properties_add_bool=o.obs_properties_add_text
+function o.obs_property_set_visible() end
+function o.obs_property_set_modified_callback() end
 function o.obs_properties_add_list(p,k) local x={};p[k]=x;return x end
 function o.obs_property_list_add_string() end
 function o.obs_properties_get(p,k) return p[k] end
@@ -159,7 +161,8 @@ assert(auto_item.src:find('brandnew',1,true))
 -- Persist and reload the auto-origin marker, then apply a readable rule.
 script_unload();OBS_ORGANIZER_TEST=true;assert(loadfile(script))();script_load(settings);t=OBS_ORGANIZER_TEST
 auto_item=t.queue[#t.queue];assert(auto_item.routing=='auto' and auto_item.phase=='auto_routed')
-settings.game_rules_v2=settings.game_rules_v2..'\nbrandnew.exe = Brand New Game'
+assert(settings.game_rules_v2:find('brandnew.exe = brandnew',1,true))
+settings.game_rules_v2=settings.game_rules_v2:gsub('brandnew%.exe = brandnew','brandnew.exe = Brand New Game')
 script_update(settings);t.retry();tick_all()
 assert(auto_item.phase=='done' and auto_item.routing=='' and auto_item.src:find('Brand New Game',1,true))
 detected,auto_folder,_,routing=t.detect();assert(auto_folder=='Brand New Game' and routing==nil,'explicit rule wins')

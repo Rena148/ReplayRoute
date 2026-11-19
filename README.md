@@ -4,7 +4,7 @@
 
 ReplayRoute sorts OBS Studio Replay Buffer clips into game folders. A single Lua script for **64-bit Windows**, running inside OBS without launching shell processes or console windows.
 
-**Version 2.1.0** · English interface · MIT license · No accounts, network requests, or telemetry.
+**Version 2.2.0** · English interface · MIT license · No accounts, network requests, or telemetry.
 
 ## Features
 
@@ -29,6 +29,8 @@ ReplayRoute sorts OBS Studio Replay Buffer clips into game folders. A single Lua
 The Lua filename is intentionally unchanged for compatibility with existing installations. Load only one copy of the script.
 
 ## Add a game
+
+After the first successful move, ReplayRoute adds the detected executable to your OBS game list. Open **Manage games and advanced settings** to edit folder names, add games manually, or retry clips.
 
 **Automatically create folders for unknown games (Game Capture only)** is enabled by default. It uses the executable name without `.exe`, not a guessed commercial game title. Existing rules take priority. Multiple conflicting targets, unsafe folder names, and unknown foreground windows do not trigger automatic folder creation. Fullscreen/hotkey capture modes do not expose a specific configured target for this feature.
 

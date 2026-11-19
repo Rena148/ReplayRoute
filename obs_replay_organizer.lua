@@ -1,5 +1,5 @@
 --[[
-    ReplayRoute 2.1.0 - OBS Replay Buffer clip organizer for Windows.
+    ReplayRoute 2.2.0 - OBS Replay Buffer clip organizer for Windows.
     Native Win32 calls through LuaJIT FFI; no external shell processes.
 ]]
 
@@ -114,7 +114,7 @@ local function get_filename_from_path(path)
     return path:match("^.+[/\\](.+)$") or path
 end
 
--- ReplayRoute 2.1.0. Windows / OBS LuaJIT.
+-- ReplayRoute 2.2.0. Windows / OBS LuaJIT.
 ffi.cdef[[
 DWORD GetLastError(void);
 DWORD GetFileAttributesW(LPCWSTR name);
@@ -212,10 +212,11 @@ local function restore()
     while #history>80 do table.remove(history,1) end
     obs.obs_data_release(d); return true
 end
-local function rules_text()
-    local lines={}; for exe,folder in pairs(game_rules) do table.insert(lines,exe..' = '..folder) end
+local function rules_text(rules)
+    local lines={}; for exe,folder in pairs(rules or game_rules) do table.insert(lines,exe..' = '..folder) end
     table.sort(lines); return table.concat(lines,'\n')
 end
+local learned={}
 local default_rules = rules_text()
 local function parse_rules(text)
     local out={}
@@ -285,10 +286,10 @@ local function detect()
     if count>1 then return '',nil,'Multiple visible Game Capture targets' end
     if count==1 then
         if fg and game_rules[fg] and fg~=only then return '',nil,'Game Capture and foreground game disagree' end
-        if game_rules[only] then return only,game_rules[only],'Configured Game Capture target' end
+        if game_rules[only] then return only,game_rules[only],'Configured Game Capture target',learned[only]==game_rules[only] and 'auto' or nil end
         if auto_create_game_folders then
             local folder=only:match('^(.*)%.exe$')
-            if folder and #folder<=120 and safe_folder(folder) then
+            if folder and #folder<=120 and not only:find('=') and not only:find('%c') and safe_folder(folder) then
                 return only,folder,'Automatic folder from Game Capture executable','auto'
             end
         end
@@ -324,6 +325,12 @@ end
 local function complete(item)
     item.src=item.dst; item.dst=''; item.error=''; item.attempts=0
     item.phase=item.folder=='' and 'unclassified' or (item.routing=='auto' and 'auto_routed' or 'done')
+    if item.routing=='auto' and not game_rules[item.exe] and settings_ref and config_error=='' then
+        learned[item.exe]=item.folder
+        game_rules[item.exe]=item.folder
+        obs.obs_data_set_string(settings_ref,'game_rules_v2',rules_text())
+        obs.obs_data_set_string(settings_ref,'learned_games',rules_text(learned))
+    end
     note('Saved: '..item.src..' | '..item.reason)
     -- Only completed receipts are bounded. Unresolved clips are never discarded.
     local count=0
@@ -385,9 +392,9 @@ local function retry()
     if not persist() then return end
     for _,item in ipairs(queue) do
         if item.phase=='blocked' then item.phase='pending'; item.attempts=0; item.next=0 end
-        if (item.phase=='unclassified' or item.phase=='auto_routed') and game_rules[item.exe] then
+        if (item.phase=='unclassified' or (item.phase=='auto_routed' and learned[item.exe]~=item.folder)) and game_rules[item.exe] then
             item.folder=game_rules[item.exe]; item.routing=''; item.phase='pending'; item.attempts=0; item.next=0
-        elseif item.phase=='pending' and (item.folder=='' or item.routing=='auto') and game_rules[item.exe] then
+        elseif item.phase=='pending' and (item.folder=='' or (item.routing=='auto' and learned[item.exe]~=item.folder)) and game_rules[item.exe] then
             item.folder=game_rules[item.exe]; item.routing=''
         end
     end
@@ -447,7 +454,7 @@ local function refresh_ui(p)
     return true
 end
 function script_description()
-    return '<h2>ReplayRoute 2.1.0</h2><p>No overwrites. Recoverable queue. Same-drive moves only.</p><p>Rules: executable.exe = Folder, one per line. Click Refresh status to see results.</p>'
+    return '<h2>ReplayRoute 2.2.0</h2><p>No overwrites. Recoverable queue. Same-drive moves only.</p><p>Save a replay to learn a game from its specific Game Capture window. Open Manage games to edit folder names.</p>'
 end
 function script_defaults(s)
     obs.obs_data_set_default_string(s,'destination_base_dir','D:\\Videos')
@@ -465,7 +472,14 @@ function script_update(s)
     auto_create_game_folders=obs.obs_data_get_bool(s,'auto_create_game_folders')
     local parsed,err=parse_rules(obs.obs_data_get_string(s,'game_rules_v2'))
     config_error=err or ''
-    if parsed then game_rules=parsed end
+    if parsed then
+        game_rules=parsed
+        learned=parse_rules(obs.obs_data_get_string(s,'learned_games')) or {}
+        for exe,folder in pairs(learned) do
+            if game_rules[exe]~=folder then learned[exe]=nil end
+        end
+        obs.obs_data_set_string(s,'learned_games',rules_text(learned))
+    end
     if not valid_base(destination_base_dir) or not safe_folder(default_folder) then config_error='Invalid folder: use an absolute local path and a single subfolder name' end
     if settings_ref~=s then
         if settings_ref then obs.obs_data_release(settings_ref) end
@@ -508,6 +522,8 @@ function script_properties()
         local folder=obs.obs_data_get_string(settings_ref,'manual_folder'):match('^%s*(.-)%s*$')
         local check,err=parse_rules(exe..' = '..folder)
         if not check then note(err); return refresh_ui(props) end
+        learned[exe]=nil
+        obs.obs_data_set_string(settings_ref,'learned_games',rules_text(learned))
         game_rules[exe]=folder
         obs.obs_data_set_string(settings_ref,'game_rules_v2',rules_text())
         script_update(settings_ref); retry(); return refresh_ui(props)
@@ -515,13 +531,25 @@ function script_properties()
     obs.obs_properties_add_button(p,'retry','Retry pending clips and apply rules',function(props) retry(); return refresh_ui(props) end)
     obs.obs_properties_add_button(p,'refresh','Refresh status',refresh_ui)
     local info=obs.obs_properties_add_text(p,'status_info',report(),obs.OBS_TEXT_INFO)
+    local toggle=obs.obs_properties_add_bool(p,'show_options','Manage games and advanced settings')
+    local optional={'default_folder','subfolder_by_date','auto_start_replay_buffer','auto_create_game_folders',
+        'game_rules_v2','manual_exe','manual_folder','selected_clip','classify_clip','apply_rule','retry'}
+    local function show_options(props,_,settings)
+        local visible=settings and obs.obs_data_get_bool(settings,'show_options') or false
+        for _,name in ipairs(optional) do
+            obs.obs_property_set_visible(obs.obs_properties_get(props,name),visible)
+        end
+        return true
+    end
+    show_options(p,toggle,settings_ref)
+    obs.obs_property_set_modified_callback(toggle,show_options)
     return p
 end
 function script_load(s)
     script_update(s)
     if not restore() then return end
     loaded=true
-    note('ReplayRoute 2.1.0 loaded; queue restored')
+    note('ReplayRoute 2.2.0 loaded; queue restored')
     obs.obs_frontend_add_event_callback(on_event)
     if persist() then schedule() end
     obs.timer_add(start_buffer,1000)
