@@ -2,19 +2,19 @@
 
 ## Loading or upgrading
 
-In **OBS → Tools → Scripts**, add `obs_replay_organizer.lua` or select the existing script and click **Reload**. The description should show **ReplayRoute 2.1.0**. Do not load a second copy.
+In **OBS → Tools → Scripts**, add `obs_replay_organizer.lua` or select the existing script and click **Reload**. The description should show **ReplayRoute 2.3.0**.
 
-Keep the existing filename and location when upgrading. Settings keys are unchanged: base folder, unclassified folder, date subfolders, Replay Buffer auto-start, and game rules. Existing folder names are preserved rather than renamed. New installations default to `Unclassified`.
+Keep the existing filename and location when upgrading to retain settings and the pending queue. Set **Base folder** to a writable local directory on the same drive and volume as your clips. A drive root such as `D:\` and a directory such as `D:\.clips` are supported. New installations use `Unclassified` for ambiguous clips.
 
 ## Rules and reclassification
 
 ### Automatic folders for unknown games
 
-The **Automatically create folders for unknown games (Game Capture only)** setting defaults to enabled. A single, unambiguous, specific-window Game Capture target with no rule creates a safe folder from its executable: `newgame.exe` becomes `newgame`. No title lookup, network request, or background scan is performed. Explicit rules override automatic naming.
+The **Auto-create game folders** setting defaults to enabled. Open a game with a visible Game Capture source and save a replay. If OBS identifies `newgame.exe`, ReplayRoute strips common technical suffixes (`-win64-shipping`, `_dx12`, etc.), reuses a uniquely matching subfolder already in **Base folder** if one exists, or creates a new folder from the cleaned name, then adds the rule to your game list after the move succeeds. An explicit rule supplies your preferred folder name.
 
-Unknown foreground windows alone, fullscreen/hotkey capture targets, conflicting captures, and invalid or reserved Windows folder names remain unclassified. Automatic names are limited to 120 bytes; a failed move still retains the source and records the error.
+An unknown foreground window or ordinary Window Capture cannot register a new game. Conflicting captures and unsafe executable names go to your unclassified folder. Automatic folder names are limited to 120 bytes.
 
-Auto-routed clips appear in the status panel and clip selector. Adding a rule and using **Save rule and reclassify** moves tracked clips to the new folder without renaming or deleting directories. These records persist across reloads and are retained until classified. Turning the option off only changes future detections. Existing queued moves retain their original routing choice.
+Open **Manage games and settings** to change rules or reclassify a clip. Tracked clips remain available across reloads. To see games learned while the Scripts window is open, click **Refresh status**. If you are editing the list, apply your draft first. ReplayRoute merges newly learned games with your edits.
 
 Each rule maps a process executable to a single folder name:
 
@@ -22,17 +22,17 @@ Each rule maps a process executable to a single folder name:
 newgame.exe = My Game
 ```
 
-Use the **Executable** and **Folder** fields, then **Save rule and reclassify**. The multiline **Games** field also supports adding, editing, and removing rules. Invalid or duplicate entries pause new moves until corrected.
+Use **Executable** and **Folder**, then **Save rule and reclassify**. To edit multiple mappings, change **Game list** and click **Apply game list and retry**. Both actions validate the draft before applying it. Until then, incoming clips use the saved rules. Invalid or duplicate entries leave those rules in place. Reloading the script discards unapplied edits. Empty game subfolders left behind inside **Base folder** after reclassifying clips are removed automatically (your original clips folder and unclassified folder are never removed).
 
-The status panel shows executables associated with unresolved clips. If detection was ambiguous, select a clip, enter the folder, and click **Assign folder to selected clip**. A manual assignment does not create a reusable rule without an executable.
+Select a clip to fill in its executable when available. Enter a folder and click **Assign to selected clip** to move only that clip. The selector shows 50 entries per page, newest first. Use its page button to reach older clips.
 
-Click **Retry pending clips and apply rules** after correcting a destination, permission, or rule.
+Click **Apply game list and retry** after correcting a destination, permission, or rule.
 
 ## Game detection
 
-ReplayRoute inspects visible Game Capture sources in the program scene, including nested scenes and groups. A source configured to capture a specific window provides its executable target. That setting does not prove the hook is active.
+ReplayRoute checks visible Game Capture and Window Capture sources in the program scene, including groups and nested scenes. A live Game Capture hook identifies the executable even in fullscreen mode. A live Window Capture can identify a game already on your list. If two visible captures identify different games, the clip goes to your unclassified folder.
 
-Multiple targets, or disagreement with another recognized foreground game, are treated as ambiguous. Without a specific target, the recognized foreground executable is used. No continuous process polling or full process scan is performed. Switching away from the game when saving can leave a clip unclassified.
+If Game Capture releases the game during Alt-Tab, ReplayRoute remembers the last confirmed executable on that source for 45 seconds. It checks the Windows process list only when a saved replay needs that fallback. Changing the program scene or hiding the source clears its remembered game. With no live hook, a specific-window Game Capture setting still supplies a candidate, even on sources without hook information. A disagreement with another candidate or a known foreground game leaves the clip unclassified. A known foreground game can identify a clip when there is no capture candidate.
 
 The bundled `javaw.exe = Minecraft` rule matches a generic Java executable. Remove that rule if other Java applications make it ambiguous on your system.
 
@@ -42,7 +42,7 @@ The native move never allows replacement of an existing destination. Numbered su
 
 The queue records intent before moving. An interruption after the rename can be reconciled on reload. Pending entries live in `obs_organizer_state.json`, with `.bak` backup, beside the script. Keep these files when updating or relocating the installation.
 
-Occupied files receive at most six attempts, with increasing delays. Permanent errors remain blocked for review. No long video copy is performed inside an OBS timer: destinations on another drive or network drive are rejected. Mount points that resolve to another volume can also fail safely.
+Occupied files receive at most six attempts with increasing delays. Permanent errors remain blocked for review. ReplayRoute checks the source and destination volume before renaming the file, including mount points within a drive letter.
 
 If queue persistence fails, moves pause. If both queue files are unreadable, they are preserved for investigation instead of overwritten. Repair the state and reload the script.
 
@@ -54,14 +54,13 @@ Click **Refresh status** for Replay Buffer state, pending/blocked/unclassified c
 
 Replay Buffer startup is requested only when enabled, then its state is checked. Enable Replay Buffer and configure encoding in OBS first. Failure messages point to **Settings → Output** and the OBS log.
 
-History is capped at 80 messages and completed receipts at 100 entries. Unresolved clips are not discarded to meet those limits. Existing libraries are not scanned retroactively.
+History is capped at 80 messages and completed receipts at 100 entries. Open advanced settings to see recent events. If auto-routed clips from previous calendar months have the folders you want, **Finish tracking** marks them complete. Their files stay where they are and later game renames skip them. Clips from this month, blocked moves and unclassified clips stay available. The action appears when eligible clips exist.
 
 ## First-run check
 
-1. Open a game and configure Game Capture for it.
-2. Save a replay.
-3. Confirm the expected folder and refresh the status panel.
-4. Open the video and confirm normal playback.
+1. Open a game with **Game Capture → Capture any fullscreen application** visible in your program scene.
+2. Save a replay. Check the folder, playback and executable shown under **Refresh status**.
+3. Keep the game running, Alt-Tab to another app and save a second replay within 45 seconds. Check that both clips are in the same game folder.
 
 ## Rollback
 
