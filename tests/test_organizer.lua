@@ -317,6 +317,14 @@ assert(not full.signals.hooked and select(2,t.detect())==nil,'hidden source stil
 full.visible=true;core_signals.source_activate({source=full});fire_sync()
 assert(select(2,t.detect())==nil,'re-enabled source inherited grace')
 
+-- Default game list keeps only Deadlock; test rules below opt into CS2 and Valorant explicitly.
+scene.items={};focused='project8.exe';assert(select(2,t.detect())=='Deadlock')
+focused='helldivers2.exe';assert(select(2,t.detect())==nil,'only Deadlock should be bundled by default')
+focused='test-desktop.exe'
+settings.manual_exe='cs2.exe';settings.manual_folder='CS2';props.apply_rule(props)
+settings.manual_exe='valorant.exe';settings.manual_folder='Valorant';props.apply_rule(props)
+settings.manual_exe='';settings.manual_folder=''
+
 local win={name='Window',id='window_capture',hooked=true,hook_exe='discord.exe'}
 scene.items={win};focused='valorant.exe'
 assert(select(2,t.detect())==nil,'a browser capture learned an unrelated foreground game')
@@ -342,7 +350,7 @@ local function select_clip(path)
  settings.selected_clip=path
  props.selected_clip.modified(props,props.selected_clip,settings)
 end
-local manual={src='unmoved.mp4',exe='example.exe',phase='unclassified',month='2000-01',attempts=0}
+local manual={src=write('unmoved.mp4','manual clip'),exe='example.exe',phase='unclassified',month='2000-01',attempts=0}
 local reclass={src=write('reclass.mp4','reclassify me'),exe='reclass.exe',phase='unclassified',month='2000-01',attempts=0}
 table.insert(t.queue,manual);table.insert(t.queue,reclass)
 select_clip(manual.src);assert(settings.manual_exe=='example.exe')
@@ -350,11 +358,11 @@ select_clip('');assert(settings.manual_exe=='')
 -- Old auto-routed receipts are archived only on request, after a successful
 -- queue write. User files, current-month clips and unresolved cases survive.
 for i=1,56 do
- table.insert(t.queue,{src='older'..i..'.mp4',exe='example.exe',phase='auto_routed',month='2000-01',routing='auto'})
+ table.insert(t.queue,{src=write('older'..i..'.mp4','old clip '..i),exe='example.exe',phase='auto_routed',month='2000-01',routing='auto'})
 end
 local keep_file=write('archive.mp4','already saved')
 local old={src=keep_file,exe='old.exe',phase='auto_routed',month='2000-01',routing='auto'}
-local current={src='current.mp4',exe='current.exe',phase='auto_routed',month=os.date('%Y-%m'),routing='auto'}
+local current={src=write('current.mp4','current clip'),exe='current.exe',phase='auto_routed',month=os.date('%Y-%m'),routing='auto'}
 table.insert(t.queue,old);table.insert(t.queue,current)
 props.refresh(props);assert(#props.selected_clip.values==51 and props.clip_page.visible and props.confirm_old.visible)
 local newest=props.selected_clip.values[2];props.clip_page(props);assert(props.selected_clip.values[2]~=newest)
@@ -383,6 +391,36 @@ assert(not props.confirm_old.visible and not props.clip_page.visible and read(ke
 local saved=native_json.load(root..'/obs_organizer_state.json')
 local by_path={};for _,row in ipairs(saved.queue) do by_path[row.src]=row.phase end
 assert(by_path[keep_file]=='done' and by_path[current.src]=='auto_routed' and by_path[manual.src]=='unclassified')
+-- Deleting clips from disk prunes unclassified/auto_routed entries on refresh when Base folder exists.
+os.remove(manual.src);os.remove(current.src)
+local missing_blocked={src=root..'/missing_blocked.mp4',exe='blocked.exe',phase='blocked',attempts=8,month='2000-01'}
+table.insert(t.queue,missing_blocked)
+props.refresh(props)
+local has_val={}
+for _,v in ipairs(props.selected_clip.values) do has_val[v]=true end
+assert(not has_val[manual.src] and not has_val[current.src],'deleted clips stayed in selector')
+assert(has_val[missing_blocked.src],'missing blocked clip should stay selectable')
+assert(props.status_info.description:find('Unclassified: 0',1,true) and props.status_info.description:find('Auto-routed (available for renaming): 0',1,true))
+local saved_after=native_json.load(root..'/obs_organizer_state.json')
+local kept_blocked=false
+for _,row in ipairs(saved_after.queue) do
+ assert(row.src~=manual.src and row.src~=current.src,'deleted clip stayed persisted')
+ if row.src==missing_blocked.src and row.phase=='blocked' then kept_blocked=true end
+end
+assert(kept_blocked,'missing blocked clip should be preserved for manual inspection')
+table.remove(t.queue)
+-- Do not prune when Base folder itself is missing (disconnected drive protection).
+local gone_clip=write('gone_drive.mp4','pending check')
+table.insert(t.queue,{src=gone_clip,exe='deadlock.exe',phase='auto_routed',month=os.date('%Y-%m'),routing='auto'})
+os.remove(gone_clip)
+local prev_base=settings.destination_base_dir
+settings.destination_base_dir=root..'/unmounted_drive';script_update(settings)
+props.refresh(props)
+local still_queued=false;for _,v in ipairs(props.selected_clip.values) do if v==gone_clip then still_queued=true end end
+assert(still_queued,'clips should not be pruned when Base folder is missing')
+settings.destination_base_dir=prev_base;script_update(settings)
+props.refresh(props)
+for _,v in ipairs(props.selected_clip.values) do assert(v~=gone_clip,'deleted clip was not pruned once Base folder returned') end
 -- Rapid same-second replay saves enqueue immediately with 200ms timer and deduplicate safely.
 scene.items={full};full.unsupported=nil;full.hooked=true;full.hook_exe='cs2.exe'
 local rapid1=write('rapid.mp4','first rapid');t.enqueue(rapid1)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.1 — 2026-11-24
+
+- Keep only Deadlock (`project8.exe` and `deadlock.exe`) in the default **Game list**, relying on automatic folder creation and reuse for other captured games.
+- Prune deleted `unclassified` and `auto_routed` clips from **Clip to reclassify** and status counts when opening **Scripts**, expanding **Manage games and settings**, clicking **Refresh status**, or retrying rules, while preserving entries when **Base folder** is unavailable.
+- Update project branding and documentation with a ReplayRoute app icon, borderless OBS Studio previews, prominent script/ZIP download links, and Spanish documentation (`README.es.md` and `docs/GUIDE.es.md`).
+
 ## 2.3.0 — 2026-11-24
 
 - Identify the executable reported by an active Game Capture hook, including fullscreen capture. Recognize registered games in Window Capture.

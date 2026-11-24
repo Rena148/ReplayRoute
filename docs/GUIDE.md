@@ -1,8 +1,10 @@
 # ReplayRoute user guide
 
+[English](#loading-or-upgrading) · [Español](GUIDE.es.md)
+
 ## Loading or upgrading
 
-In **OBS → Tools → Scripts**, add `obs_replay_organizer.lua` or select the existing script and click **Reload**. The description should show **ReplayRoute 2.3.0**.
+In **OBS → Tools → Scripts**, add `obs_replay_organizer.lua` or select the existing script and click **Reload**. The description should show **ReplayRoute 2.3.1**.
 
 Keep the existing filename and location when upgrading to retain settings and the pending queue. Set **Base folder** to a writable local directory on the same drive and volume as your clips. A drive root such as `D:\` and a directory such as `D:\.clips` are supported. New installations use `Unclassified` for ambiguous clips.
 
@@ -26,6 +28,8 @@ Use **Executable** and **Folder**, then **Save rule and reclassify**. To edit mu
 
 Select a clip to fill in its executable when available. Enter a folder and click **Assign to selected clip** to move only that clip. The selector shows 50 entries per page, newest first. Use its page button to reach older clips.
 
+If you manually delete tracked `unclassified` or `auto_routed` clips from disk, ReplayRoute automatically removes them from **Clip to reclassify** and status counters when you open **Scripts**, expand **Manage games and settings**, click **Refresh status**, or click **Apply game list and retry** (as long as **Base folder** is accessible).
+
 Click **Apply game list and retry** after correcting a destination, permission, or rule.
 
 ## Game detection
@@ -34,7 +38,7 @@ ReplayRoute checks visible Game Capture and Window Capture sources in the progra
 
 If Game Capture releases the game during Alt-Tab, ReplayRoute remembers the last confirmed executable on that source for 45 seconds. It checks the Windows process list only when a saved replay needs that fallback. Changing the program scene or hiding the source clears its remembered game. With no live hook, a specific-window Game Capture setting still supplies a candidate, even on sources without hook information. A disagreement with another candidate or a known foreground game leaves the clip unclassified. A known foreground game can identify a clip when there is no capture candidate.
 
-The bundled `javaw.exe = Minecraft` rule matches a generic Java executable. Remove that rule if other Java applications make it ambiguous on your system.
+Deadlock (`project8.exe` and `deadlock.exe`) is included by default so its Valve codename maps cleanly to `Deadlock`. All other games are learned automatically from **Game Capture** or can be added in **Game list**.
 
 ## File protection
 

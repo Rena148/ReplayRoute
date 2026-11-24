@@ -1,93 +1,176 @@
-# ReplayRoute
+<div align="center">
+  <br>
+  <p>
+    <img src="docs/brand/replayroute-icon.png" width="112" height="112" alt="ReplayRoute icon">
+  </p>
+  <h1>ReplayRoute</h1>
+  <p>
+    <b>English</b> · <a href="README.es.md">Español</a>
+  </p>
+  <p>
+    <b>Save the replay. Keep it organized.</b><br>
+    A lightweight OBS Studio Lua script for <b>64-bit Windows</b> that routes Replay Buffer clips straight into per-game folders — without launching external processes, console windows, or network requests.
+  </p>
+  <p>
+    <a href="#releases--download"><img alt="Version 2.3.1" src="https://img.shields.io/badge/version-2.3.1-2563eb?style=flat-square"></a>
+    <img alt="Platform: Windows x64" src="https://img.shields.io/badge/Windows_x64-OBS_Studio_(LuaJIT)-1e293b?style=flat-square">
+    <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3a3a3a?style=flat-square"></a>
+    <img alt="No telemetry · Offline" src="https://img.shields.io/badge/offline-no_telemetry-16a34a?style=flat-square">
+  </p>
+  <p>
+    <a href="https://github.com/Rena148/ReplayRoute/releases/latest/download/obs_replay_organizer.lua"><img alt="Download obs_replay_organizer.lua" src="https://img.shields.io/badge/Download-obs__replay__organizer.lua_(v2.3.1)-2563eb?style=for-the-badge&logo=lua&logoColor=white" height="40"></a>
+    <a href="https://github.com/Rena148/ReplayRoute/archive/refs/tags/v2.3.1.zip"><img alt="Download Source ZIP" src="https://img.shields.io/badge/Source_Archive-.zip-334155?style=for-the-badge" height="40"></a>
+  </p>
+  <p>
+    <sub>Only <code>obs_replay_organizer.lua</code> is needed to run inside OBS Studio · <a href="#releases--download">All releases &amp; direct files</a></sub>
+  </p>
+  <p>
+    <a href="#features">Features</a> ·
+    <a href="#releases--download">Download</a> ·
+    <a href="#quick-start">Quick start</a> ·
+    <a href="#managing-games-and-clips">Manage games</a> ·
+    <a href="#behavior-and-limits">Behavior &amp; limits</a> ·
+    <a href="#tests">Tests</a> ·
+    <a href="docs/GUIDE.md">User guide</a>
+  </p>
+</div>
 
-**Save the replay. Keep it organized.**
+<br>
 
-ReplayRoute sorts OBS Studio Replay Buffer clips into game folders. A single Lua script for **64-bit Windows**, running inside OBS without launching shell processes or console windows.
+<p align="center">
+  <img src="docs/preview.png" width="840" alt="ReplayRoute 2.3.1 inside OBS Studio Scripts with Manage games and settings collapsed">
+  <br>
+  <sub>Main script panel in OBS Studio showing Replay Buffer state, pending/unclassified counters, and collapsed controls.</sub>
+</p>
 
-**Version 2.3.0** · English interface · MIT license · No accounts, network requests, or telemetry.
+<br>
 
-## Features
+<table>
+  <tr>
+    <td width="25%" valign="top">
+      <h3>🎮 Game Capture aware</h3>
+      Reads the active executable directly from visible Game Capture hooks (including fullscreen) and handles Alt-Tab gaps for up to 45 seconds while the game process is alive.
+    </td>
+    <td width="25%" valign="top">
+      <h3>📁 Smart auto-folders</h3>
+      Strips technical suffixes (such as <code>-Win64-Shipping</code> or <code>_dx12</code>), reuses uniquely matching existing folders inside <b>Base folder</b>, or creates new folders automatically.
+    </td>
+    <td width="25%" valign="top">
+      <h3>🛡️ Crash-safe queue</h3>
+      Tracks moves in a persistent JSON journal, never overwrites existing clips, retries temporary Windows file locks, and blocks slow cross-drive or network copies.
+    </td>
+    <td width="25%" valign="top">
+      <h3>⚙️ Manage inside OBS</h3>
+      Edit <b>Game list</b>, reclassify clips manually, prune empty leftover folders, hide clips already deleted from disk, and archive older months right inside OBS Scripts.
+    </td>
+  </tr>
+</table>
 
-- **No overwrites:** filename collisions receive numbered suffixes.
-- **Game-aware routing:** asks visible OBS capture sources which executable they are capturing, including in fullscreen games.
-- **Automatic folders for new games:** save a replay while Game Capture is capturing `newgame.exe` to create its `newgame` folder and remember it in OBS.
-- **Recoverable moves:** a persistent JSON queue tracks pending work across reloads.
-- **Bounded retries:** temporary file locks are retried; persistent failures remain available for review.
-- **Rules inside OBS:** add, edit, or remove executable-to-folder mappings without editing Lua.
-- **Manual reclassification:** assign ambiguous clips to a folder and retry failed moves.
-- **Visible status:** check pending items, recent history, and actual Replay Buffer state.
-- **Optional auto-start:** request Replay Buffer startup when the script loads.
+<br>
 
-![ReplayRoute in OBS Studio Scripts](docs/preview.png)
+## Releases & Download
 
-*Main script panel in OBS Studio with **Manage games and settings** collapsed.*
+ReplayRoute does not require an installer. **`obs_replay_organizer.lua` is the only file OBS Studio needs**; documentation and automated tests live in `docs/` and `tests/`.
+
+| Download option | What you get | Link |
+|---|---|---|
+| **Standalone script (Recommended)** | Single `obs_replay_organizer.lua` file for OBS (1-click direct download from Releases) | [`obs_replay_organizer.lua` (v2.3.1)](https://github.com/Rena148/ReplayRoute/releases/latest/download/obs_replay_organizer.lua) · [View source](https://github.com/Rena148/ReplayRoute/blob/v2.3.1/obs_replay_organizer.lua) |
+| **Full source archive (`.zip`)** | Complete `v2.3.1` repository including guide, screenshots, and LuaJIT test suite | [`ReplayRoute-v2.3.1.zip`](https://github.com/Rena148/ReplayRoute/archive/refs/tags/v2.3.1.zip) |
+| **Releases & older versions** | Tagged versions, release notes, and full version history | [GitHub Releases](https://github.com/Rena148/ReplayRoute/releases) · [Tags](https://github.com/Rena148/ReplayRoute/tags) · [Changelog](CHANGELOG.md) |
+
+### Recent versions
+
+- **`v2.3.1`** — Minimal default game list (Deadlock only), automatic pruning of deleted `unclassified` and `auto_routed` clips on open/refresh/retry, refreshed previews and bilingual documentation.
+- **`v2.3.0`** — Native fullscreen Game Capture hook detection, 45-second Alt-Tab grace with Windows process check, technical suffix stripping, smart existing folder reuse, empty folder cleanup, and compact OBS UI.
+- **`v2.2.0`** — Simplified **Add or update rule** workflow inside OBS.
+
+See [CHANGELOG.md](CHANGELOG.md) for the complete history.
 
 ## Quick start
 
-1. Download this repository using **Code → Download ZIP** and extract it to a writable folder.
-2. Open **OBS → Tools → Scripts → +** and select `obs_replay_organizer.lua`.
-3. Set **Base folder** to a local folder on the **same drive as your original clips**. The initial example is `D:\Videos`; change it to match your computer.
-4. Enable and configure Replay Buffer in **Settings → Output**, and assign a hotkey to save replays.
-5. Open a game with Game Capture set to **Capture any fullscreen application** or **Capture specific window**. Save a replay and click **Refresh status** to see where it went.
+1. Download [`obs_replay_organizer.lua`](https://github.com/Rena148/ReplayRoute/releases/latest/download/obs_replay_organizer.lua) (or download and extract [`ReplayRoute-v2.3.1.zip`](https://github.com/Rena148/ReplayRoute/archive/refs/tags/v2.3.1.zip)) to a permanent writable folder on your PC.
+2. Open **OBS → Tools → Scripts → `+`** and load `obs_replay_organizer.lua`.
+3. Set **Base folder** to a local directory on the **same drive and volume as your original clips** (the default placeholder `D:\Videos` should match your drive).
+4. Enable and configure Replay Buffer in **OBS → Settings → Output**, and bind a hotkey to save replays.
+5. Launch a game with **Game Capture** set to **Capture any fullscreen application** or **Capture specific window**, save a replay, and click **Refresh status** to check the destination.
 
-The Lua filename is intentionally unchanged for compatibility with existing installations. Load only one copy of the script.
+> [!NOTE]
+> Keep the filename `obs_replay_organizer.lua` unchanged when upgrading so existing OBS settings and your pending queue carry over cleanly. Load only one copy of the script.
 
-## Add a game
+## Features
 
-After the first successful move, ReplayRoute adds the detected executable to your OBS game list. Open **Manage games and settings** to edit folder names, add games manually, or retry clips.
+- **Zero overwrites:** filename collisions automatically receive numbered suffixes (`clip (1).mp4`) and native Win32 moves disallow replacing existing files.
+- **Game-aware routing:** inspects visible OBS capture sources (`Game Capture` and `Window Capture`, including inside groups and nested scenes).
+- **Minimal defaults:** ships only with Deadlock (`project8.exe` / `deadlock.exe`); all other games are learned automatically or added explicitly.
+- **Recoverable moves:** persistent JSON queue (`obs_organizer_state.json` + `.bak`) reconciles moves across OBS restarts.
+- **Bounded retries:** locked files wait with increasing delays up to six attempts before pausing for manual review.
+- **Built-in cleanup:** deleted clips disappear from **Clip to reclassify** when **Base folder** is accessible, and empty leftover folders are removed after reclassifying.
+- **Optional auto-start:** can request Replay Buffer startup when OBS finishes loading.
 
-**Auto-create game folders** is enabled by default. When Game Capture detects an unregistered game, ReplayRoute strips common technical executable suffixes (such as `-Win64-Shipping` or `_dx12`), reuses an unambiguously matching existing subfolder in **Base folder** (for example `rocketleague.exe` → `Rocket League`), or creates a folder from the cleaned executable name. Existing rules take priority. Multiple conflicting targets, unsafe folder names, and unknown foreground windows do not trigger automatic folder creation.
+## Managing games and clips
 
-To rename a game's folder for future and tracked clips, enter its executable and the new folder, then click **Save rule and reclassify** (empty automatic folders left behind after moving all clips are cleaned up automatically). To finish tracking older clips in their current folders, use the action for previous months under **Manage games and settings**.
+<p align="center">
+  <img src="docs/preview-manage.png" width="840" alt="ReplayRoute 2.3.1 with Manage games and settings expanded showing Game list, Clip to reclassify, and reclassification actions">
+  <br>
+  <sub>Expanded <b>Manage games and settings</b> view: rule editor, clip selector, and manual reassignment buttons.</sub>
+</p>
 
-You can also edit several rules in **Game list** and click **Apply game list and retry**. Edits take effect together when you apply them.
+When **Auto-create game folders** is enabled (default), ReplayRoute inspects the executable from Game Capture, strips common technical suffixes (`-Win64-Shipping`, `_dx12`, etc.), reuses a uniquely matching subfolder already inside **Base folder** (for example `rocketleague.exe` → `Rocket League`), or creates a folder from the cleaned name and remembers the rule after the move succeeds.
 
-```text
-newgame.exe = My Game
-anothergame.exe = Another Game
-```
+Inside **Manage games and settings**:
 
-To correct a single clip, select **Clip to reclassify**, enter a folder, and click **Assign to selected clip**. Selecting a clip fills in its executable when available.
+- **Edit multiple rules at once:** modify **Game list** (`exe = Folder name`, one per line) and click **Apply game list and retry**.
+
+  ```text
+  newgame.exe = My Game
+  anothergame.exe = Another Game
+  ```
+
+- **Rename a game and move tracked clips:** fill in **Executable** and **Folder**, then click **Save rule and reclassify**. Empty automatic subfolders left behind inside **Base folder** are removed automatically.
+- **Reclassify a single clip:** choose an entry in **Clip to reclassify** (newest first, 50 per page; selecting a clip pre-fills its executable when known), enter a **Folder**, and click **Assign to selected clip**.
+- **Archive previous months:** click **Finish tracking … older clips** when available to mark old `auto_routed` clips complete without moving them again.
+- **Sync deleted files:** manually deleted `unclassified` or `auto_routed` clips clear out automatically from **Clip to reclassify** and status counts when you open **Scripts**, expand **Manage games and settings**, click **Refresh status**, or apply rules (while preserving entries whenever **Base folder** is unmounted).
 
 ## Updating
 
-Back up the existing Lua file and queue JSON. Replace the Lua file in the same location, then click **Reload** in OBS. Existing settings and game rules remain compatible, including custom folder names. Older queue entries may retain their original log language until processed.
-
-Do not run another organizer on the same clips at the same time.
+Back up your existing `obs_replay_organizer.lua` and `obs_organizer_state.json`. Replace `obs_replay_organizer.lua` in the same folder and click **Reload (`↻`)** in OBS. Existing OBS settings, **Base folder**, and your saved **Game list** remain intact. Do not run another clip-moving script on the same files simultaneously.
 
 ## Behavior and limits
 
-- If Game Capture loses its hook after Alt-Tab, ReplayRoute can use the last confirmed game for up to 45 seconds in the same scene while the process is running. With no live hook, a specific-window Game Capture target or a recognized foreground game can also identify the clip. Ambiguous clips go to your unclassified folder.
-- Only new replay events and saved queue entries are processed. ReplayRoute does not scan an existing video library.
-- Moves stay on the same local drive. Cross-drive copies and network destinations are blocked to avoid long copy operations inside OBS.
-- The queue records moves; it is not a video backup and cannot repair incomplete recordings or disk failures.
-- If queue storage fails, moves pause. A failed move leaves the source file in place when it has not already moved.
-- Event-driven processing reduces unnecessary work, but is not zero-cost or background-thread execution. Same-volume moves are normally quick, not instantaneous.
-- Click **Refresh status** to update the panel; it does not refresh continuously.
+<details>
+<summary>Expand technical details on detection, safety limits, and storage</summary>
 
-Runtime state lives beside the script in `obs_organizer_state.json` and its `.bak` backup. These files can contain local paths and are excluded from Git.
+- If Game Capture loses its hook on Alt-Tab, ReplayRoute remembers the last confirmed executable on that source for up to 45 seconds in the same scene while the process is running. With no live hook, a specific-window Game Capture target or a recognized foreground game can identify the clip; ambiguous targets route to your unclassified folder.
+- Only new Replay Buffer saves and saved queue entries are processed; ReplayRoute does not scan existing video folders.
+- Moves stay on the same local volume (`MoveFileExW` without `COPY_ALLOWED`). Cross-drive and network targets are blocked instead of performing slow copies on the OBS thread.
+- The queue journal tracks move state, not video integrity, and pauses moves if queue persistence fails.
+- Processing is event-driven with short timers rather than polling; **Refresh status** updates panel counts and history on demand.
+- Runtime state is stored beside the script in `obs_organizer_state.json` and `obs_organizer_state.json.bak` (ignored by Git).
+
+</details>
 
 ## Tests
 
-Requirements: Windows x64, 64-bit Python, and OBS Studio installed. Python is **only required for tests**, not to use ReplayRoute.
+Requirements: **Windows x64**, **64-bit Python**, and **OBS Studio** installed. Python is only required to run the test suite, not to use ReplayRoute.
 
 ```powershell
 python tests/run_lua.py tests/test_organizer.lua
 ```
 
-For a custom OBS installation:
+For a custom OBS installation path:
 
 ```powershell
 $env:OBS_BIN = 'E:\Apps\obs-studio\bin\64bit'
 python tests/run_lua.py tests/test_organizer.lua
 ```
 
-The suite uses installed LuaJIT/libobs, real temporary file moves, Windows process enumeration and JSON persistence. It simulates OBS capture, scene and UI events. Coverage includes fullscreen detection, Alt-Tab expiry, hidden and nested sources, staged rule edits, older clip tracking, collisions and interrupted moves.
+The suite executes under OBS's bundled LuaJIT and `libobs` using real temporary files, Win32 process snapshots, file lock tests, simulated capture/scene signals, and JSON persistence.
 
-**Still requires real-world validation:** saving a replay inside OBS and measuring performance during gameplay. Passing the tests does not establish that the project is fault-proof.
+> [!IMPORTANT]
+> Automated tests do not replace real-world validation: test saving a replay inside OBS during live gameplay to confirm behavior on your setup.
 
-[User guide](docs/GUIDE.md) · [Changelog](CHANGELOG.md)
+## Documentation & License
 
-## License
-
-MIT. Copyright © 2026 Rena148. OBS and LuaJIT are not redistributed and retain their respective licenses. ReplayRoute is an independent project, not an official OBS plugin.
+- [User guide (English)](docs/GUIDE.md) · [Guía de usuario (Español)](docs/GUIDE.es.md)
+- [Changelog](CHANGELOG.md)
+- **License:** [MIT](LICENSE) — Copyright © 2026 Rena148. OBS Studio and LuaJIT are not redistributed and keep their respective licenses. ReplayRoute is an independent script, not an official OBS project.

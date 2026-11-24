@@ -1,5 +1,5 @@
 --[[
-    ReplayRoute 2.3.0 - OBS Replay Buffer clip organizer for Windows.
+    ReplayRoute 2.3.1 - OBS Replay Buffer clip organizer for Windows.
     Native Win32 calls through LuaJIT FFI; no external shell processes.
 ]]
 
@@ -63,32 +63,10 @@ local subfolder_by_date = false
 local auto_start_replay_buffer = true
 local auto_create_game_folders = true
 
--- Executable-to-game folder rules
+-- Executable-to-game folder rules (Deadlock only by default; new games are learned automatically)
 local game_rules = {
-    ["valorant-win64-shipping.exe"] = "Valorant",
-    ["valorant.exe"] = "Valorant",
-    ["dungeoncrawler.exe"] = "Dark And Darker",
-    ["dungeoncrawler-win64-shipping.exe"] = "Dark And Darker",
-    ["cs2.exe"] = "CS2",
-    ["csgo.exe"] = "CS2",
-    ["r5apex_dx12.exe"] = "Apex Legends",
-    ["r5apex.exe"] = "Apex Legends",
     ["project8.exe"] = "Deadlock",
-    ["deadlock.exe"] = "Deadlock",
-    ["marvel-win64-shipping.exe"] = "Marvel Rivals",
-    ["marvelrivals.exe"] = "Marvel Rivals",
-    ["fpsaimtrainer-win64-shipping.exe"] = "Kovaak's",
-    ["fpsaimtrainer.exe"] = "Kovaak's",
-    ["overwatch.exe"] = "Overwatch",
-    ["rocketleague.exe"] = "Rocket League",
-    ["chivalry2-win64-shipping.exe"] = "Chivalry",
-    ["chivalry2.exe"] = "Chivalry",
-    ["league of legends.exe"] = "League of Legends",
-    ["fortniteclient-win64-shipping.exe"] = "Fortnite",
-    ["javaw.exe"] = "Minecraft",
-    ["gta5.exe"] = "GTA V",
-    ["rustclient.exe"] = "Rust",
-    ["helldivers2.exe"] = "Helldivers 2"
+    ["deadlock.exe"] = "Deadlock"
 }
 
 -- UTF-8 / UTF-16 conversion for Windows paths
@@ -677,9 +655,29 @@ local function enqueue(path)
     note('Queued: '..path..' | '..why..' | '..exe)
     if persist() then schedule() end
 end
+local function prune_missing_clips()
+    if not loaded or not storage_ok then return false end
+    local base=norm(destination_base_dir)
+    -- Only prune already-delivered/reclassifiable entries when Base folder is mounted, so disconnected drives do not drop history.
+    if not valid_base(base) or not directory(base) then return false end
+    local write_idx,changed=1,false
+    for i=1,#queue do
+        local item=queue[i]
+        if (item.phase=='unclassified' or item.phase=='auto_routed') and item.src and item.src~='' and not exists(item.src) then
+            changed=true
+        else
+            if write_idx~=i then queue[write_idx]=item end
+            write_idx=write_idx+1
+        end
+    end
+    for i=#queue,write_idx,-1 do queue[i]=nil end
+    if not changed then return false end
+    return persist()
+end
 local function retry()
     if not loaded or config_error~='' then return end
     if not persist() then return end
+    prune_missing_clips()
     for _,item in ipairs(queue) do
         if item.phase=='blocked' then item.phase='pending'; item.attempts=0; item.next=0 end
         if (item.phase=='unclassified' or (item.phase=='auto_routed' and learned[item.exe]~=item.folder)) and game_rules[item.exe] then
@@ -864,12 +862,13 @@ local function apply_editor(s,exe,folder)
 end
 local function refresh_ui(p)
     if settings_ref then sync_editor(settings_ref,false) end
+    prune_missing_clips()
     obs.obs_property_set_description(obs.obs_properties_get(p,'status_info'),report())
     fill_selector(p,settings_ref and obs.obs_data_get_bool(settings_ref,'show_options'))
     return true
 end
 function script_description()
-    return '<h2>ReplayRoute 2.3.0</h2><p>Save a replay while Game Capture is capturing your game. Creates or reuses its folder and remembers the game.</p>'
+    return '<h2>ReplayRoute 2.3.1</h2><p>Save a replay while Game Capture is capturing your game. Creates or reuses its folder and remembers the game.</p>'
 end
 function script_defaults(s)
     obs.obs_data_set_default_string(s,'destination_base_dir','D:\\Videos')
@@ -923,6 +922,7 @@ end
 function script_properties()
     local p=obs.obs_properties_create()
     if settings_ref then sync_editor(settings_ref,false) end
+    prune_missing_clips()
     set_tip(obs.obs_properties_add_path(p,'destination_base_dir','Base folder',obs.OBS_PATH_DIRECTORY,nil,nil),
         'Local folder on the same drive and volume as your original clips.')
     obs.obs_properties_add_button(p,'refresh','Refresh status',refresh_ui)
@@ -1003,6 +1003,7 @@ function script_properties()
         for _,name in ipairs(optional) do
             obs.obs_property_set_visible(obs.obs_properties_get(props,name),visible)
         end
+        if visible then prune_missing_clips() end
         fill_selector(props,visible)
         obs.obs_property_set_description(obs.obs_properties_get(props,'status_info'),report())
         return true
@@ -1016,7 +1017,7 @@ function script_load(s)
     sync_editor(s,true)
     if not restore() then return end
     loaded=true
-    note('ReplayRoute 2.3.0 loaded; queue restored')
+    note('ReplayRoute 2.3.1 loaded; queue restored')
     obs.obs_frontend_add_event_callback(on_event)
     local signals=obs.obs_get_signal_handler()
     obs.signal_handler_connect(signals,'source_activate',on_visibility_change)
